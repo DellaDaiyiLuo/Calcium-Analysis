@@ -122,28 +122,33 @@ def comp_poststates_pos(origin, Trace, Distance, lengths = None, sort = 'angle',
     return x, plst, occ, posterior_states, pos_COM
         
 # func3.2
-def plot_poststates_pos(x, vmax=.2):
+def plot_poststates_pos(x, vmax=.2, f=None, ax=None):
     """Plot latent state place field"""
-    plt.imshow(x, vmax=vmax)
-    plt.colorbar()
-    plt.xlabel('Position bins')
-    plt.ylabel('State')
-    plt.title('Posterior state probability')
+    if ax==None:
+        f, ax = plt.subplots(figsize=(8,4))
+    im = ax.imshow(x, vmax=vmax)
+    ax.set_xlabel('Position bins')
+    ax.set_ylabel('State')
+    ax.set_title('Posterior state probability')
+    divider = make_axes_locatable(ax)
+    f.colorbar(im, cax=divider.append_axes("right", size=0.1,pad=0.05))
 
 # func3.3
-def plot_postprob(posterior_states, plst, lap_end, ax=None, t_st=400, t_duration=300):
+def plot_postprob(posterior_states, plst, lap_end, Distance, ax=None, t_st=400, t_duration=300):
     """plot posterior probability"""
     if ax==None:
         _, ax = plt.subplots(figsize=(15,3))
     ax.matshow(-posterior_states[t_st:t_st+t_duration,plst].T, cmap = 'gray')
     num = np.where((lap_end>t_st)&(lap_end<t_st+t_duration))[0]
     lap_end0 = lap_end - t_st
+    ax.plot(Distance[t_st:t_st+t_duration]*10, label='position')
     for i in num:
         ax.plot([lap_end0[i],lap_end0[i]],[0,plst.size-1], 'r--')
     ax.xaxis.set_ticks_position('bottom')
     ax.set_title('Posterior Probability')
     ax.set_xlabel('Time')
     ax.set_ylabel('State')
+    plt.legend(bbox_to_anchor=(.8, 1))
     
 
 # func3.4
@@ -208,7 +213,7 @@ def plot_means(T, f=None, ax=None):
 def show_all_plots(origin, Trace, Distance, lap_end, lengths=None, sort = 'angle', t_st=400, t_duration=200, vmax=.2):
     x, plst, occ, posterior_states, pos_COM = comp_poststates_pos(origin, Trace, Distance, lengths = lengths, sort = sort)
     plot_poststates_pos(x,vmax=vmax)
-    plot_postprob(posterior_states, plst, lap_end, t_st=t_st, t_duration=t_duration)
+    plot_postprob(posterior_states, plst, lap_end, Distance, t_st=t_st, t_duration=t_duration)
 
     T, order = order_transmat(origin.transmat_, origin.startprob_, order=plst)
     plot_transM(T)

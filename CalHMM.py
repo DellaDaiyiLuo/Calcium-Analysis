@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import warnings
+warnings.filterwarnings('ignore')
 
 # Shuffle
 # func1.1
@@ -129,7 +131,7 @@ def plot_poststates_pos(x, vmax=.2, f=None, ax=None):
     im = ax.imshow(x, vmax=vmax)
     ax.set_xlabel('Position bins')
     ax.set_ylabel('State')
-    ax.set_title('Posterior state probability')
+    ax.set_title('Spatial Probability of Hidden States')
     divider = make_axes_locatable(ax)
     f.colorbar(im, cax=divider.append_axes("right", size=0.1,pad=0.05))
 
@@ -138,17 +140,28 @@ def plot_postprob(posterior_states, plst, lap_end, Distance, ax=None, t_st=400, 
     """plot posterior probability"""
     if ax==None:
         _, ax = plt.subplots(figsize=(15,3))
-    ax.matshow(-posterior_states[t_st:t_st+t_duration,plst].T, cmap = 'gray')
-    num = np.where((lap_end>t_st)&(lap_end<t_st+t_duration))[0]
-    lap_end0 = lap_end - t_st
-    ax.plot(Distance[t_st:t_st+t_duration]*10, label='position')
-    for i in num:
-        ax.plot([lap_end0[i],lap_end0[i]],[0,plst.size-1], 'r--')
+    ax.matshow(-posterior_states[:,plst].T, cmap = 'gray')
+    ax.plot(Distance*10, label='position')
+    for i in lap_end:
+        ax.plot([i,i],[0,plst.size-1], 'r--')
     ax.xaxis.set_ticks_position('bottom')
-    ax.set_title('Posterior Probability')
+    ax.set_title('Posterior Probability of States')
     ax.set_xlabel('Time')
     ax.set_ylabel('State')
+    ax.set_xlim(t_st,t_st+t_duration)
     plt.legend(bbox_to_anchor=(.8, 1))
+    
+#    ax.matshow(-posterior_states[t_st:t_st+t_duration,plst].T, cmap = 'gray')
+#    num = np.where((lap_end>t_st)&(lap_end<t_st+t_duration))[0]
+#    lap_end0 = lap_end - t_st
+#    ax.plot(Distance[t_st:t_st+t_duration]*10, label='position')
+#    for i in num:
+#        ax.plot([lap_end0[i],lap_end0[i]],[0,plst.size-1], 'r--')
+#    ax.xaxis.set_ticks_position('bottom')
+#    ax.set_title('Posterior Probability')
+#    ax.set_xlabel('Time')
+#    ax.set_ylabel('State')
+#    plt.legend(bbox_to_anchor=(.8, 1))
     
 
 # func3.4
@@ -192,7 +205,7 @@ def plot_transM(T, f=None, ax=None):
     im = ax.matshow(T)
     ax.set_xlabel('state j')
     ax.set_ylabel('state i')
-    ax.set_title('Transition matrix A')
+    ax.set_title('Transition Matrix A')
     ax.xaxis.set_ticks_position('bottom')
     divider = make_axes_locatable(ax)
     f.colorbar(im, cax=divider.append_axes("right", size=0.1,pad=0.05))
@@ -204,7 +217,7 @@ def plot_means(T, f=None, ax=None):
     im = ax.matshow(T)
     ax.set_xlabel('Neuron')
     ax.set_ylabel('State')
-    ax.set_title('Observation Matrix')
+    ax.set_title(r'Observation Matrix $\mu$')
     ax.xaxis.set_ticks_position('bottom')
     divider = make_axes_locatable(ax)
     f.colorbar(im, cax=divider.append_axes("right", size=0.1,pad=0.05))
@@ -212,12 +225,31 @@ def plot_means(T, f=None, ax=None):
 # func3.8
 def show_all_plots(origin, Trace, Distance, lap_end, lengths=None, sort = 'angle', t_st=400, t_duration=200, vmax=.2):
     x, plst, occ, posterior_states, pos_COM = comp_poststates_pos(origin, Trace, Distance, lengths = lengths, sort = sort)
-    plot_poststates_pos(x,vmax=vmax)
-    plot_postprob(posterior_states, plst, lap_end, Distance, t_st=t_st, t_duration=t_duration)
-
     T, order = order_transmat(origin.transmat_, origin.startprob_, order=plst)
-    plot_transM(T)
-    plot_means(origin.means_[order, :])
+    parameters = {'axes.labelsize': 12,
+              'axes.titlesize': 12,
+              'legend.fontsize': 12,
+              'xtick.labelsize': 12,
+              'ytick.labelsize': 12 }
+    plt.rcParams.update(parameters)
+    fig = plt.figure(figsize=(12,9),constrained_layout=True)
+    plt.subplots_adjust(wspace=0.25)
+    gs = fig.add_gridspec(4, 14, wspace=2)
+    ax1 = fig.add_subplot(gs[:2,:4])
+    plot_transM(T, f=fig, ax=ax1)
+    ax2 = fig.add_subplot(gs[:2,5:],sharey=ax1)
+    plot_poststates_pos(x,vmax=vmax,f=fig,ax=ax2)
+    ax3 = fig.add_subplot(gs[2,:])
+    plot_means(origin.means_[order, :], f=fig, ax=ax3)
+    ax4 = fig.add_subplot(gs[3,:])
+    plot_postprob(posterior_states, plst, lap_end, Distance, ax=ax4,t_st=t_st, t_duration=t_duration)
+
+#    plot_poststates_pos(x,vmax=vmax)
+#    plot_postprob(posterior_states, plst, lap_end, Distance, t_st=t_st, t_duration=t_duration)
+#
+#    T, order = order_transmat(origin.transmat_, origin.startprob_, order=plst)
+#    plot_transM(T)
+#    plot_means(origin.means_[order, :])
     
     return x, plst, occ, T, posterior_states, pos_COM
 

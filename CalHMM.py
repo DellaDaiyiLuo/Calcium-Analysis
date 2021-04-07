@@ -141,9 +141,10 @@ def plot_postprob(posterior_states, plst, lap_end, Distance, ax=None, t_st=400, 
     if ax==None:
         _, ax = plt.subplots(figsize=(15,3))
     ax.matshow(-posterior_states[:,plst].T, cmap = 'gray')
-    ax.plot(Distance*10, label='position')
-    for i in lap_end:
-        ax.plot([i,i],[0,plst.size-1], 'r--')
+    ax.plot(Distance/Distance.max()*20, label='position')
+    if lap_end!=[]:
+        for i in lap_end:
+            ax.plot([i,i],[0,plst.size-1], 'r--')
     ax.xaxis.set_ticks_position('bottom')
     ax.set_title('Posterior Probability of States')
     ax.set_xlabel('Time')

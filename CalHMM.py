@@ -109,6 +109,7 @@ def comp_poststates_pos(origin, Trace, Distance, lengths = None, sort = 'angle',
                 x[i,:] = x[i,:]/np.sum(x[i,:])
     
     if sort=='maximum':
+        pos_COM = d[np.argmax(x,axis=1)]
         plst = np.argsort(np.argmax(x,axis=1))
         x = x[plst,:]
     elif sort=='angle':
@@ -120,6 +121,7 @@ def comp_poststates_pos(origin, Trace, Distance, lengths = None, sort = 'angle',
         x = x[plst,:]
     else:
         plst = np.arange(origin.n_components)
+        pos_COM=[]
     
     return x, plst, occ, posterior_states, pos_COM
         
@@ -256,19 +258,26 @@ def show_all_plots(origin, Trace, Distance, lap_end, lengths=None, sort = 'angle
 
 # Compute accuracy
 # func4.1
-def comp_decoded_pos_acc(Distance, posterior_states, pos_COM):
+def comp_decoded_pos_acc(Distance, posterior_states, pos_COM, mode = 'circle'):
     dec_state = np.argmax(posterior_states, axis = 1)
     Decoded_pos = pos_COM[dec_state]
     
     # compute accuracy
     d = np.unique(Distance)
     m=d[1]+d[-1]
-    theta = 2*np.pi*Distance/m
-    theta_dc = 2*np.pi*Decoded_pos/m
-    error = np.arccos(np.cos(theta - theta_dc))
-    dev_angle = np.sqrt(np.mean(error**2))
-
-    err_rate=dev_angle/(2*np.pi)
-    dev=dev_angle*m/(2*np.pi)
     
+    if mode=='circle':
+        theta = 2*np.pi*Distance/m
+        theta_dc = 2*np.pi*Decoded_pos/m
+        error = np.arccos(np.cos(theta - theta_dc))
+        dev_angle = np.sqrt(np.mean(error**2))
+        err_rate=dev_angle/(2*np.pi)
+        dev=dev_angle*m/(2*np.pi)
+        
+    elif mode=='linear':
+        error = Distance - Decoded_pos
+        dev = np.sqrt(np.mean(error**2))
+        err_rate = dev/m
+        print(m)
+        
     return err_rate, dev, Decoded_pos

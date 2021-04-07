@@ -92,7 +92,11 @@ def comp_poststates_pos(origin, Trace, Distance, lengths = None, sort = 'angle',
        Output: x, plst, occ, posterior_states, pos_COM
        Parameters
        -----------
-       sort: 'angle', 'maximum', or 'none'. """
+       sort: 'angle', 'maximum', or 'none'. 
+       
+       Returns
+       -----------
+       occ: number of occurrences of specific position"""
     
     _, posterior_states = origin.score_samples(Trace, lengths=lengths)
     

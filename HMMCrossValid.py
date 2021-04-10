@@ -98,7 +98,7 @@ class datainfo():
                     print(f'Train set: chunk {i_chunk} set {i_set}\n')
 
                 if self.name=='Spike':
-                    origin = hmmlearn.hmm.PoissonHMM(n_components=20)
+                    origin = hmmlearn.hmm.PoissonHMM(n_components=20, verbose=True)
                 elif self.name=='Trace':
                     origin = hmmlearn.hmm.GaussianHMM(n_components=20)
 
@@ -236,7 +236,7 @@ def test_HMM(origin, Trace, Distance, pos_COM_train, lengths=None, plot=False, p
     logprob, posterior_states = origin.score_samples(Trace, lengths)
     err_rate, _, Decoded_pos = CalHMM.comp_decoded_pos_acc(Distance, posterior_states, pos_COM_train)
     if plot:
-        CalHMM.plot_postprob(posterior_states, plst_train, np.cumsum(lengths), ax=None, t_st=0, t_duration=Distance.shape[0])
+        CalHMM.plot_postprob(posterior_states, plst_train, np.cumsum(lengths), Distance, ax=None, t_st=0, t_duration=Distance.shape[0])
         plt.show()
     return logprob, err_rate, Decoded_pos
 

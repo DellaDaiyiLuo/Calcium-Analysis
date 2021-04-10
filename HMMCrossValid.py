@@ -11,10 +11,11 @@ from scipy.stats import norm, poisson
 
 # auxiliary funtions
 class datainfo():
-    def __init__(self, folder, timebin, name, n_chunks, k=2):
+    def __init__(self, folder, timebin, name, n_chunks, k=2, win=1):
         self.iter = 0
         self.name = name
         self.k = k
+        self.win = win
         self.folder = folder
         file_main = f'{folder}/timebin_{timebin}.npz'
         data = np.load(file_main)
@@ -28,16 +29,18 @@ class datainfo():
             self.Trace0 = data['Trace']
         
         self.n_chunks = n_chunks
-        self.n_laps_perchunk = int((self.lap_end0.shape[0]-1)/n_chunks)
+        self.n_laps_perchunk = int((self.lap_end0.shape[0]-1)/n_chunks)*win
         lap_range = []
-        for i_chunk in range(n_chunks):
-            lap_range.append([self.n_laps_perchunk*i_chunk, self.n_laps_perchunk*(i_chunk+1)])
+        n_laps_perstep = int((self.lap_end0.shape[0]-1)/n_chunks)
+        for i_chunk in range(n_chunks+1-win):
+            lap_range.append([n_laps_perstep*i_chunk, n_laps_perstep*(i_chunk+win)])
         self.lap_range = lap_range
     
-        self.logprob_train = [[] for i in range(n_chunks)]
-        self.errrate_train = [[] for i in range(n_chunks)]
-        self.logprob_test = [[[] for i in range(n_chunks)] for j in range(n_chunks)]
-        self.errrate_test = [[[] for i in range(n_chunks)] for j in range(n_chunks)]
+        n = len(lap_range)
+        self.logprob_train = [[] for i in range(n)]
+        self.errrate_train = [[] for i in range(n)]
+        self.logprob_test = [[[] for i in range(n)] for j in range(n)]
+        self.errrate_test = [[[] for i in range(n)] for j in range(n)]
 
     def separate_chunk_set(self):
         '''Separate the data into chunks and sets within chunk.'''
@@ -46,9 +49,8 @@ class datainfo():
         train_lap_len = []
         train_idx = []
 
-        r = np.random.choice(self.n_laps_perchunk,size=self.n_laps_perchunk,replace=False)
-        s = np.zeros(self.n_laps_perchunk)
-        for i_chunk in range(self.n_chunks):
+        for i_chunk in range(self.n_chunks+1-self.win):
+            r = np.random.choice(self.n_laps_perchunk,size=self.n_laps_perchunk,replace=False)
             train_lap_chunk = []
             train_lap_len_chunk = []
             train_idx_chunk = []
@@ -66,7 +68,6 @@ class datainfo():
         
     def HMMSetCrossValid(self, text = True, plot = False):
         '''Hidden Markov Model: Cross validate between chunks of data
-
         Parameters
         -------------
         folder: directory to time-binned behaviour and spike data.
@@ -81,8 +82,8 @@ class datainfo():
         errrate_train = self.errrate_train.copy()
         errrate_test = self.errrate_test.copy()
 
-        for i_chunk in range(self.n_chunks):
-            chunkselect = np.delete(np.arange(self.n_chunks), obj=i_chunk).astype('int')
+        for i_chunk in range(len(self.lap_range)):
+            chunkselect = np.delete(np.arange(len(self.lap_range)), obj=i_chunk).astype('int')
             print(f'Train chunk: {i_chunk}')
 
             for i_set in range(self.k):
@@ -145,8 +146,7 @@ class datainfo():
 
 
     def estimate_mean(self):
-        output_folder = f'{self.folder}/LapCrossValid'
-        n_chunks = self.n_chunks
+        n_chunks = len(self.lap_range)
         logprob_test_mean = np.zeros((n_chunks, n_chunks))
         errrate_test_mean = np.zeros((n_chunks, n_chunks))
         for i in range(n_chunks):
@@ -162,7 +162,6 @@ class datainfo():
         
     def GaussianSetCrossValid(self, text = True, plot = False):
             '''Gaussian model: Cross validate between chunks of data
-
             Parameters
             -------------
             folder: directory to time-binned behaviour and spike data.
@@ -180,8 +179,8 @@ class datainfo():
             d = np.unique(self.Distance0)
             dbins = d.shape[0]
 
-            for i_chunk in range(self.n_chunks):
-                chunkselect = np.delete(np.arange(self.n_chunks), obj=i_chunk).astype('int')
+            for i_chunk in range(len(self.lap_range)):
+                chunkselect = np.delete(np.arange(len(self.lap_range)), obj=i_chunk).astype('int')
                 print(f'Train chunk: {i_chunk}')
 
                 for i_set in range(self.k):
@@ -289,5 +288,3 @@ def test_Model(Trace, Distance, d, dbins, mean_cal, std_cal, not_once, once, nam
         plt.legend()
         plt.show()
     return err_rate, logprob
-    
-    

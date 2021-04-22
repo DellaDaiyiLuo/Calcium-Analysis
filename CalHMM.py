@@ -143,12 +143,15 @@ def plot_poststates_pos(x, vmax=.2, f=None, ax=None):
     f.colorbar(im, cax=divider.append_axes("right", size=0.1,pad=0.05))
 
 # func3.3
-def plot_postprob(posterior_states, plst, lap_end, Distance, ax=None, t_st=400, t_duration=300):
+def plot_postprob(posterior_states, plst, lap_end, Distance, Decoded_pos, ax=None, t_st=400, t_duration=300):
     """plot posterior probability"""
+    
     if ax==None:
         _, ax = plt.subplots(figsize=(15,3))
     ax.matshow(-posterior_states[:,plst].T, cmap = 'gray')
-    ax.plot(Distance/Distance.max()*20, label='position')
+    ax.plot(Distance/Distance.max()*20, label='actual pos')
+    ax.plot(Decoded_pos/Distance.max()*20, label='deocded pos')
+    
     if lap_end!=[]:
         for i in lap_end:
             ax.plot([i,i],[0,plst.size-1], 'r--')
@@ -250,7 +253,9 @@ def show_all_plots(origin, Trace, Distance, lap_end, lengths=None, sort = 'angle
     ax3 = fig.add_subplot(gs[2,:])
     plot_means(origin.means_[order, :], f=fig, ax=ax3)
     ax4 = fig.add_subplot(gs[3,:])
-    plot_postprob(posterior_states, plst, lap_end, Distance, ax=ax4,t_st=t_st, t_duration=t_duration)
+    dec_state = np.argmax(posterior_states, axis = 1)
+    Decoded_pos = pos_COM[dec_state]
+    plot_postprob(posterior_states, plst, lap_end, Distance, Decoded_pos, ax=ax4,t_st=t_st, t_duration=t_duration)
 
 #    plot_poststates_pos(x,vmax=vmax)
 #    plot_postprob(posterior_states, plst, lap_end, Distance, t_st=t_st, t_duration=t_duration)
@@ -263,8 +268,16 @@ def show_all_plots(origin, Trace, Distance, lap_end, lengths=None, sort = 'angle
 
 # Compute accuracy
 # func4.1
-def comp_decoded_pos_acc(Distance, posterior_states, pos_COM, mode = 'circle'):
+def comp_decoded_pos_acc(Distance, posterior_states, pos_COM, stateselect=[], mode = 'circle', print_c=False):
+    
+    if stateselect!=[]:
+        posterior_states = posterior_states[:,stateselect]
+        pos_COM = pos_COM[stateselect]
+    
     dec_state = np.argmax(posterior_states, axis = 1)
+    if print_c:
+        _, c = np.unique(dec_state, return_counts=True)
+        print(f'Decoded state counts: {c}')
     Decoded_pos = pos_COM[dec_state]
     
     # compute accuracy
@@ -286,3 +299,96 @@ def comp_decoded_pos_acc(Distance, posterior_states, pos_COM, mode = 'circle'):
         print(m)
         
     return err_rate, dev, Decoded_pos
+
+
+# For animal on real world linear track
+from scipy.signal import savgol_filter
+
+def divide_direct(Distance, direct):
+    difdis = np.diff(Distance)
+    difd = savgol_filter(difdis,15,2)
+    if direct=='fwd':
+        flag=1
+    elif direct=='bwd':
+        flag=-1
+    gtz = np.where(difd*flag>0)[0]
+    e_fwd = np.where(np.diff(gtz)>1)[0]
+    s_fwd = np.insert(e_fwd[:-1]+1, 0, 0)
+    i = np.where((Distance[gtz[e_fwd]]-Distance[gtz[s_fwd]])*flag<100)[0]
+    s_fwd = np.delete(s_fwd,i)
+    e_fwd = np.delete(e_fwd,i)
+    idx_fwd = np.concatenate(([np.arange(gtz[s_fwd[i]],gtz[e_fwd[i]]+1) for i in range(len(s_fwd))]))
+    return idx_fwd
+
+
+def comp_dec_pos(Distance, posterior_states, idx_fwd, n_components):
+    
+    Distance_fwd = Distance[idx_fwd]
+    d = np.unique(Distance_fwd)
+    posterior_states_fwd = posterior_states[idx_fwd,:]
+    dec_state = np.argmax(posterior_states, axis = 1)
+
+    x_fwd = np.zeros((n_components,len(d)))
+    occ = np.zeros(len(d))
+    for i in range(len(d)):
+        x_fwd[:,i] = np.mean(posterior_states_fwd[np.where(Distance_fwd==d[i])[0],:],axis=0)
+        occ[i] = np.where(Distance_fwd==d[i])[0].shape[0]
+
+    for i in range(n_components):
+        if np.sum(x_fwd[i,:])!=0:
+            x_fwd[i,:] = x_fwd[i,:]/np.sum(x_fwd[i,:])
+
+    pos_COM = d[np.argmax(x_fwd,axis=1)]
+    plst_fwd = np.argsort(np.argmax(x_fwd,axis=1))
+    x_fwd = x_fwd[plst_fwd,:]
+
+    dec_pos_fwd = pos_COM[dec_state[idx_fwd]]
+    
+    return dec_pos_fwd, x_fwd, plst_fwd
+
+def comp_decoded_dir(origin, Spike, Distance, plot=True):
+    '''Returns:
+    -----------------
+        err_rate, idx_fwd, idx_bwd, Decoded_position, Distance_both, x_bwd, x_fwd'''
+    idx_fwd = divide_direct(Distance,direct='fwd')
+    idx_bwd = divide_direct(Distance,direct='bwd')
+    
+    _, posterior_states = origin.score_samples(Spike)
+    dec_state = np.argmax(posterior_states, axis=1)
+    print(np.unique(dec_state, return_counts=True))
+    print(origin.n_components)
+    dec_pos_bwd, x_bwd, plst_bwd = comp_dec_pos(Distance, posterior_states, idx_bwd, origin.n_components)
+    dec_pos_fwd, x_fwd, plst_fwd = comp_dec_pos(Distance, posterior_states, idx_fwd, origin.n_components)
+
+    idx_both = np.zeros_like(Distance)
+    idx_both[idx_bwd] = -1
+    idx_both[idx_fwd] = 1
+    Distance_both = Distance[np.where(idx_both!=0)[0]]
+
+    Decoded_position = np.zeros_like(Distance)
+    Decoded_position[idx_fwd]=dec_pos_fwd
+    Decoded_position[idx_bwd]=dec_pos_bwd
+    Decoded_position = Decoded_position[np.where(idx_both!=0)[0]]
+    
+    d = np.unique(Distance_both)
+    m=d[1]+d[-1]
+    error = Distance_both - Decoded_position
+    dev = np.sqrt(np.mean(error**2))
+    err_rate = dev/m
+    print(f'err_rate:{err_rate}')
+
+    if plot:
+        plt.figure(figsize=(12,2))
+        plt.plot(Distance)
+        plt.plot(idx_fwd,Distance[idx_fwd],'.',label='forward')
+        plt.plot(idx_bwd,Distance[idx_bwd],'.',label='backward')
+        plt.ylabel('position')
+        plt.xlabel('time')
+        plt.legend()
+        
+        plt.figure()
+        CalHMM.plot_postprob(posterior_states[idx_fwd,:], plst_fwd, lap_end=[], Distance=Distance[idx_fwd], Decoded_pos=dec_pos_fwd, ax=None, t_st=0, t_duration=len(idx_fwd))
+        plt.figure()
+        CalHMM.plot_postprob(posterior_states[idx_bwd,:], plst_bwd, lap_end=[], Distance=Distance[idx_bwd], Decoded_pos=dec_pos_bwd, ax=None, t_st=0, t_duration=len(idx_bwd))
+
+    return err_rate, idx_fwd, idx_bwd, Decoded_position, Distance_both, x_bwd, x_fwd

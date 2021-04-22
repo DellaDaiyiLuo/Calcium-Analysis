@@ -80,7 +80,7 @@ class datainfo():
     
     
         
-    def HMMSetCrossValid(self, text = True, plot = False, random = True, shuffle = None):
+    def HMMSetCrossValid(self, text = True, plot = False, random = True, shuffle = None, del_salstate=False):
         '''Hidden Markov Model: Cross validate between chunks of data
         Parameters
         -------------
@@ -141,12 +141,25 @@ class datainfo():
                         plt.plot(Trace_train[:,10])
                         plt.show()
                         
+                    print(f'train trace shape: {Trace_train.shape}')
                     origin.fit(Trace_train, self.len_train)
                     
                     if plot & self.k==1:
                         CalHMM.plot_transM(origin.transmat_)
-                    _, plst_train, _, _, pos_COM_train = CalHMM.comp_poststates_pos(origin, self.Trace_train, self.Distance_train, lengths=self.len_train)
-                    logprob, err_rate, _ = test_HMM(origin, self.Trace_train, self.Distance_train, pos_COM_train, self.len_train, plot=plot, plst_train=plst_train)
+                        
+                    
+                    
+                    _, plst_train, _, posterior_states, pos_COM_train = CalHMM.comp_poststates_pos(origin, self.Trace_train, self.Distance_train, lengths=self.len_train)
+                    # Delete salient state which are mostly noise
+                    if del_salstate:
+                        _,c = np.unique(np.argmax(posterior_states,axis=1),return_counts=True)
+                        obj = np.where(c>.5*len(self.Distance_train))[0]
+                        print(obj)
+                        self.stateselect = np.delete(np.arange(origin.n_components), obj=obj).astype('int')
+                    else:
+                        self.stateselect = []
+                    
+                    logprob, err_rate, _ = test_HMM(origin, self.Trace_train, self.Distance_train, pos_COM_train, lengths=self.len_train, stateselect=self.stateselect, plot=plot, plst_train=plst_train, print_c=True)
                     logprob_n = logprob/self.len_train.sum()
                     print(f'logprob_n: {logprob_n}, length: {self.len_train.sum()}')
 
@@ -166,7 +179,8 @@ class datainfo():
                     print(f'Test set: chunk {i_chunk_test} set {i_set}')
                     print(f'Laps in test set: {train_lap[i_chunk_test][i_set]}')
                 Trace_test = self.Trace0[train_idx[i_chunk_test][i_set],:]
-                logprob, err_rate, _ = test_HMM(origin, Trace_test[:,fire_neuron], self.Distance0[train_idx[i_chunk_test][i_set]], pos_COM_train, train_lap_len[i_chunk_test][i_set], plot=plot, plst_train=plst_train)
+                print(f'test trace shape: {Trace_test[:,fire_neuron].shape}')
+                logprob, err_rate, _ = test_HMM(origin, Trace_test[:,fire_neuron], self.Distance0[train_idx[i_chunk_test][i_set]], pos_COM_train, lengths=train_lap_len[i_chunk_test][i_set], stateselect=self.stateselect, plot=plot, plst_train=plst_train)
                 nest1.append(logprob/train_lap_len[i_chunk_test][i_set].sum())
                 nest2.append(err_rate)
 
@@ -178,7 +192,8 @@ class datainfo():
                             print(f'Test set: chunk {i_chunk_test} set {i_test}')
                             print(f'Laps in test set: {train_lap[i_chunk_test][i_test]}')
                         Trace_test = self.Trace0[train_idx[i_chunk_test][i_test],:]
-                        logprob, err_rate, _ = test_HMM(origin, Trace_test[:,fire_neuron], self.Distance0[train_idx[i_chunk_test][i_test]], pos_COM_train, train_lap_len[i_chunk_test][i_test], plot=plot, plst_train=plst_train)
+                        print(f'test trace shape: {Trace_test[:,fire_neuron].shape}')
+                        logprob, err_rate, _ = test_HMM(origin, Trace_test[:,fire_neuron], self.Distance0[train_idx[i_chunk_test][i_test]], pos_COM_train, lengths=train_lap_len[i_chunk_test][i_test], stateselect=self.stateselect, plot=plot, plst_train=plst_train)
                         nest1.append(logprob/train_lap_len[i_chunk_test][i_test].sum())
                         nest2.append(err_rate)
 
@@ -309,11 +324,11 @@ def mean_exc_outlier(a):
     m = np.mean(a[(a>lower_range)&(a<upper_range)])
     return m
 
-def test_HMM(origin, Trace, Distance, pos_COM_train, lengths=None, plot=False, plst_train=[]):
+def test_HMM(origin, Trace, Distance, pos_COM_train, lengths=None, stateselect=[], plot=False, plst_train=[], print_c=False):
     logprob, posterior_states = origin.score_samples(Trace, lengths)
-    err_rate, _, Decoded_pos = CalHMM.comp_decoded_pos_acc(Distance, posterior_states, pos_COM_train)
+    err_rate, _, Decoded_pos = CalHMM.comp_decoded_pos_acc(Distance, posterior_states, pos_COM_train, stateselect=stateselect, print_c=print_c)
     if plot:
-        CalHMM.plot_postprob(posterior_states, plst_train, np.cumsum(lengths), Distance, ax=None, t_st=0, t_duration=Distance.shape[0])
+        CalHMM.plot_postprob(posterior_states, plst_train, np.cumsum(lengths), Distance,Decoded_pos=Decoded_pos, ax=None, t_st=0, t_duration=Distance.shape[0])
         plt.show()
     return logprob, err_rate, Decoded_pos
 
